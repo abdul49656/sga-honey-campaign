@@ -3,6 +3,11 @@
  * Compiled from main.ts — Spring/Summer 2025
  */
 
+// ── Config ────────────────────────────────────────────────
+// Paste your deployed Google Apps Script Web App URL here.
+// Deploy as: Execute as > Me, Who has access > Anyone
+const GOOGLE_SHEET_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
 // ── Navbar ───────────────────────────────────────────────
 
 function initNavbar() {
@@ -205,23 +210,69 @@ function initForm() {
   const form = document.querySelector('.cform');
   if (!form) return;
 
-  form.addEventListener('submit', (e) => {
+  // Inject inline status message element
+  const status = document.createElement('p');
+  status.id = 'cf-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.style.cssText = 'font-family:"DM Sans",sans-serif;font-size:0.875rem;text-align:center;margin-top:0.5rem;min-height:1.4em;transition:opacity 0.3s ease';
+  form.appendChild(status);
+
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = form.querySelector('[type="submit"]');
-    if (!btn) return;
+    const btn      = form.querySelector('[type="submit"]');
+    const nameVal  = document.getElementById('cf-name').value.trim();
+    const emailVal = document.getElementById('cf-email').value.trim();
+    const emailRx  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    const orig      = btn.textContent ?? '';
-    btn.textContent = 'Sent! 🍯';
+    if (!nameVal) {
+      showStatus('error', 'Please enter your full name.');
+      document.getElementById('cf-name').focus();
+      return;
+    }
+    if (!emailVal || !emailRx.test(emailVal)) {
+      showStatus('error', 'Please enter a valid email address.');
+      document.getElementById('cf-email').focus();
+      return;
+    }
+    if (btn.disabled) return;
+
+    const origText  = btn.textContent;
+    btn.textContent = 'Sending…';
     btn.disabled    = true;
-    btn.classList.add('success');
+    showStatus('', '');
 
-    setTimeout(() => {
-      btn.textContent = orig;
-      btn.disabled    = false;
-      btn.classList.remove('success');
+    const body = new URLSearchParams({
+      name:     nameVal,
+      email:    emailVal,
+      interest: document.getElementById('cf-how').value,
+      message:  document.getElementById('cf-msg').value.trim()
+    });
+
+    try {
+      await fetch(GOOGLE_SHEET_URL, { method: 'POST', mode: 'no-cors', body });
+      btn.textContent = 'Sent! 🍯';
+      btn.classList.add('success');
+      showStatus('success', "Thanks! We'll be in touch soon.");
       form.reset();
-    }, 3000);
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.disabled    = false;
+        btn.classList.remove('success');
+        showStatus('', '');
+      }, 4000);
+    } catch {
+      btn.textContent = origText;
+      btn.disabled    = false;
+      showStatus('error', 'Something went wrong. Check your connection and try again.');
+    }
   });
+
+  function showStatus(type, text) {
+    status.textContent = text;
+    status.style.color   = type === 'error' ? '#C0392B' : type === 'success' ? '#27AE60' : 'inherit';
+    status.style.opacity = text ? '1' : '0';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────

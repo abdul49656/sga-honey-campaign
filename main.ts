@@ -6,6 +6,11 @@
  * Run `tsc` to recompile after changes.
  */
 
+// ── Config ────────────────────────────────────────────────
+// Paste your deployed Google Apps Script Web App URL here.
+// Deploy as: Execute as > Me, Who has access > Anyone
+const GOOGLE_SHEET_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
 // ── Types ────────────────────────────────────────────────
 
 interface ParallaxLayer {
@@ -231,23 +236,74 @@ function initForm(): void {
   const form = document.querySelector<HTMLFormElement>('.cform');
   if (!form) return;
 
-  form.addEventListener('submit', (e: SubmitEvent): void => {
+  // Inject inline status message element
+  const status = document.createElement('p');
+  status.id = 'cf-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.style.cssText = 'font-family:"DM Sans",sans-serif;font-size:0.875rem;text-align:center;margin-top:0.5rem;min-height:1.4em;transition:opacity 0.3s ease';
+  form.appendChild(status);
+
+  form.addEventListener('submit', async (e: SubmitEvent): Promise<void> => {
     e.preventDefault();
-    const btn = form.querySelector<HTMLButtonElement>('[type="submit"]');
-    if (!btn) return;
+    const btn      = form.querySelector<HTMLButtonElement>('[type="submit"]');
+    const nameEl   = document.getElementById('cf-name')  as HTMLInputElement;
+    const emailEl  = document.getElementById('cf-email') as HTMLInputElement;
+    const howEl    = document.getElementById('cf-how')   as HTMLSelectElement;
+    const msgEl    = document.getElementById('cf-msg')   as HTMLTextAreaElement;
 
-    const orig      = btn.textContent ?? '';
-    btn.textContent = 'Sent! 🍯';
+    const nameVal  = nameEl.value.trim();
+    const emailVal = emailEl.value.trim();
+    const emailRx  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!nameVal) {
+      showStatus('error', 'Please enter your full name.');
+      nameEl.focus();
+      return;
+    }
+    if (!emailVal || !emailRx.test(emailVal)) {
+      showStatus('error', 'Please enter a valid email address.');
+      emailEl.focus();
+      return;
+    }
+    if (!btn || btn.disabled) return;
+
+    const origText  = btn.textContent ?? '';
+    btn.textContent = 'Sending…';
     btn.disabled    = true;
-    btn.classList.add('success');
+    showStatus('', '');
 
-    setTimeout((): void => {
-      btn.textContent = orig;
-      btn.disabled    = false;
-      btn.classList.remove('success');
+    const body = new URLSearchParams({
+      name:     nameVal,
+      email:    emailVal,
+      interest: howEl.value,
+      message:  msgEl.value.trim()
+    });
+
+    try {
+      await fetch(GOOGLE_SHEET_URL, { method: 'POST', mode: 'no-cors', body });
+      btn.textContent = 'Sent! 🍯';
+      btn.classList.add('success');
+      showStatus('success', "Thanks! We'll be in touch soon.");
       form.reset();
-    }, 3000);
+      setTimeout((): void => {
+        btn.textContent = origText;
+        btn.disabled    = false;
+        btn.classList.remove('success');
+        showStatus('', '');
+      }, 4000);
+    } catch {
+      btn.textContent = origText;
+      btn.disabled    = false;
+      showStatus('error', 'Something went wrong. Check your connection and try again.');
+    }
   });
+
+  function showStatus(type: '' | 'success' | 'error', text: string): void {
+    status.textContent = text;
+    status.style.color   = type === 'error' ? '#C0392B' : type === 'success' ? '#27AE60' : 'inherit';
+    status.style.opacity = text ? '1' : '0';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────
